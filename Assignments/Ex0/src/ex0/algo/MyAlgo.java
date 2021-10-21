@@ -3,22 +3,20 @@ package ex0.algo;
 import ex0.Building;
 import ex0.CallForElevator;
 import ex0.Elevator;
-import ex0.simulator.Call_A;
 import ex0.simulator.Elevator_A;
-import ex0.simulator.ElevetorCallList;
 
 import java.util.*;
 
 public class MyAlgo implements ElevatorAlgo {
     private Building _building;
     private ArrayList<Integer> floorOrder;
-    private int[] dist;
+    private double[] time2Floor;
 
 
     public MyAlgo(Building b) {
         _building = b;
         floorOrder = new ArrayList<Integer>();
-        dist = new int[_building.numberOfElevetors()];
+        time2Floor = new double[_building.numberOfElevetors()];
     }
 
     @Override
@@ -33,32 +31,42 @@ public class MyAlgo implements ElevatorAlgo {
 
     @Override
     public int allocateAnElevator(CallForElevator c) {
-        for (int i = 0; i < dist.length; i++) { //initialize array
-            dist[i] = Integer.MAX_VALUE;
+        for (int i = 0; i < time2Floor.length; i++) { //initialize array
+            time2Floor[i] = Double.MAX_VALUE;
         }
         if (_building.numberOfElevetors() == 1) { //base case
             return 0;
         }
         for (int i = 0; i < _building.numberOfElevetors(); i++) {
             if (_building.getElevetor(i).getState() == Elevator.LEVEL) {
-                dist[i] = Math.abs(_building.getElevetor(i).getPos() - c.getSrc());
+                time2Floor[i] = TimeToGetThere(_building.getElevetor(i),c.getSrc() ) ;
             }
             if (_building.getElevetor(i).getState() == c.getType()) {
                 switch (c.getType()) {
                     case CallForElevator.UP:
                         if (_building.getElevetor(i).getPos() <= c.getSrc())
-                            dist[i] = Math.abs(_building.getElevetor(i).getPos() - c.getSrc());
+                            time2Floor[i] = TimeToGetThere(_building.getElevetor(i),c.getSrc() ) ;
                     case CallForElevator.DOWN:
                         if (_building.getElevetor(i).getPos() >= c.getSrc())
-                            dist[i] = Math.abs(_building.getElevetor(i).getPos() - c.getSrc());
+                            time2Floor[i] = TimeToGetThere(_building.getElevetor(i),c.getSrc() ) ;
                 }
             }
         }
-        return MinValueIndexArr(dist);
+        return MinValueIndexArr(time2Floor);
     }
 
-    private int MinValueIndexArr(int[] arr) {
-        int MinValue = arr[0];
+    private double TimeToGetThere(Elevator e, int floor) {
+        double time = 0;
+        if (e.getState() == Elevator.LEVEL) {
+            time += (e.getTimeForClose() + e.getTimeForOpen() + e.getStartTime() + e.getStopTime() + (e.getSpeed() * Math.abs(e.getPos() - floor)));
+        } else {
+            time += (e.getTimeForOpen() + e.getStopTime() + (e.getSpeed() * Math.abs(e.getPos() - floor)));
+        }
+        return time;
+    }
+
+    private int MinValueIndexArr(double[] arr) {
+        double MinValue = arr[0];
         int index = 0;
         for (int i = 1; i < arr.length; i++) {
             if (arr[i] < MinValue) {
@@ -71,28 +79,24 @@ public class MyAlgo implements ElevatorAlgo {
 
     @Override
     public void cmdElevator(int elev) {
-        Elevator_A curr = (Elevator_A) _building.getElevetor(elev);
-        if (curr.get_curr_calls().size() == 0) return;
-        else if (curr.get_curr_calls().size() == 1) {
-            if (curr.get_curr_calls().get(0).getState() == CallForElevator.INIT)
-                curr.goTo(curr.get_curr_calls().get(0).getSrc());
-            else if (curr.getState() == Elevator.LEVEL && curr.get_curr_calls().get(0).getState() == CallForElevator.GOING2SRC)
+        Elevator_A curr = (Elevator_A) _building.getElevetor(elev); //The "elev" elevator in the building;
+        if (curr.get_curr_calls().size() == 0) return; //No calls = Do nothing
+        else if (curr.get_curr_calls().size() == 1) { //Only one call => Pick up from Src then go to Dest
+            if (curr.get_curr_calls().get(0).getState() == CallForElevator.INIT) { // Elevator hasn't  done anything yet with only call
+                curr.goTo(curr.get_curr_calls().get(0).getSrc());//Pick up from Src
+            } else if (curr.getState() == Elevator.LEVEL && curr.get_curr_calls().get(0).getState() == CallForElevator.GOING2SRC) {
                 curr.goTo(curr.get_curr_calls().get(0).getDest());
-            else if (curr.get_curr_calls().get(0).getState() == CallForElevator.DONE) return;
-            else curr.goTo(curr.get_curr_calls().get(0).getDest());
-        }
-        if (curr.get_curr_calls().size() > 1) {
-            if (curr.get_curr_calls().get(0).getState() == CallForElevator.INIT)
+            } else if (curr.get_curr_calls().get(0).getState() == CallForElevator.DONE) return;
+            else {
+                curr.goTo(curr.get_curr_calls().get(0).getDest());
+            }
+        } else {
+            if (curr.get_curr_calls().get(0).getState() == CallForElevator.INIT) {
                 curr.goTo(curr.get_curr_calls().get(0).getSrc());
-            else if (curr.getState() == Elevator.LEVEL && curr.get_curr_calls().get(0).getState() == CallForElevator.GOING2SRC) {
+            } else if (curr.getState() == Elevator.LEVEL && curr.get_curr_calls().get(0).getState() == CallForElevator.GOING2SRC) {
                 orderSetter(curr);
                 curr.goTo(floorOrder.get(floorOrder.size() - 1));
-                switch (curr.getState()) {
-                    case Elevator.UP:
-                        if (curr.getPos() <= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                    case Elevator.DOWN:
-                        if (curr.getPos() >= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                }
+                nextStop(curr);
             } else if (curr.get_curr_calls().get(0).getState() == CallForElevator.DONE) {
                 for (int i = 1; i < curr.get_curr_calls().size(); i++) {
                     if (curr.get_curr_calls().get(i).getState() != CallForElevator.DONE) {
@@ -102,38 +106,30 @@ public class MyAlgo implements ElevatorAlgo {
                         } else if (curr.getState() == Elevator.LEVEL && curr.get_curr_calls().get(i).getState() == CallForElevator.GOING2SRC) {
                             orderSetter(curr);
                             curr.goTo(floorOrder.get(floorOrder.size() - 1));
-                            switch (curr.getState()) {
-                                case Elevator.UP:
-                                    if (curr.getPos() <= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                                case Elevator.DOWN:
-                                    if (curr.getPos() >= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                            }
+                            nextStop(curr);
                         } else {
                             orderSetter(curr);
-                            switch (curr.getState()) {
-                                case Elevator.UP:
-                                    if (curr.getPos() <= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                                case Elevator.DOWN:
-                                    if (curr.getPos() >= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-
-                            }
+                            nextStop(curr);
                         }
                     }
                 }
             }
-                if (curr.get_curr_calls().get(0).getState() == CallForElevator.GOIND2DEST) {
-                    orderSetter(curr);
-                    switch (curr.getState()) {
-                        case Elevator.UP:
-                            if (curr.getPos() <= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                        case Elevator.DOWN:
-                            if (curr.getPos() >= floorOrder.get(0)) curr.stop(floorOrder.get(0));
-                    }
-
-                }
-
+            if (curr.get_curr_calls().get(0).getState() == CallForElevator.GOIND2DEST) {
+                orderSetter(curr);
+                nextStop(curr);
             }
         }
+    }
+
+    private void nextStop(Elevator curr) {
+        switch (curr.getState()) {
+            case Elevator.UP:
+                if (curr.getPos() <= floorOrder.get(0)) curr.stop(floorOrder.get(0));
+            case Elevator.DOWN:
+                if (curr.getPos() >= floorOrder.get(0)) curr.stop(floorOrder.get(0));
+        }
+    }
+
     private void orderSetter(Elevator_A curr) {
         floorOrder.clear();
         floorOrder.add(curr.get_curr_calls().get(0).getDest());
