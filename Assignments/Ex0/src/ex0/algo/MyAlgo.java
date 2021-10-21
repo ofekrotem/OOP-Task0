@@ -8,7 +8,7 @@ import ex0.simulator.Elevator_A;
 import java.util.*;
 
 public class MyAlgo implements ElevatorAlgo {
-    private Building _building;
+    private final Building _building;
     private ArrayList<Integer> floorOrder;
     private double[] time2Floor;
 
@@ -31,9 +31,7 @@ public class MyAlgo implements ElevatorAlgo {
 
     @Override
     public int allocateAnElevator(CallForElevator c) {
-        for (int i = 0; i < time2Floor.length; i++) { //initialize array
-            time2Floor[i] = Double.MAX_VALUE;
-        }
+        Arrays.fill(time2Floor, Double.MAX_VALUE);
         if (_building.numberOfElevetors() == 1) { //base case
             return 0;
         }
